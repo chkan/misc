@@ -1,0 +1,89 @@
+import os
+import uuid
+import time
+import concurrent.futures
+import threading
+import psutil
+from boto3.session import Session
+from boto3.s3.transfer import TransferConfig, S3Transfer
+
+import boto3
+
+# Configuration
+BUCKET_NAME = 'your-bucket-name'  # Replace with your bucket
+REGION = 'us-east-1'
+FILE_SIZE_MB = 100
+CONCURRENT_TRANSFERS = 5  # Number of concurrent uploads/downloads
+TEST_KEY_PREFIX = f'test-s3-speed-{uuid.uuid4()}'
+
+# Setup S3 client and transfer config
+session = Session(region_name=REGION)
+s3_client = session.client('s3')
+config = TransferConfig(
+    multipart_threshold=5 * 1024 * 1024,  # Multipart if file > 5MB
+    max_concurrency=CONCURRENT_TRANSFERS,
+    multipart_chunksize=8 * 1024 * 1024,
+    use_threads=True
+)
+transfer = S3Transfer(s3_client, config)
+
+# File paths
+temp_dir = "/tmp"
+upload_files = [os.path.join(temp_dir, f"upload_{i}.bin") for i in range(CONCURRENT_TRANSFERS)]
+download_files = [os.path.join(temp_dir, f"download_{i}.bin") for i in range(CONCURRENT_TRANSFERS)]
+
+
+def generate_test_file(path, size_mb):
+    with open(path, 'wb') as f:
+        f.write(os.urandom(size_mb * 1024 * 1024))
+
+
+def upload_file(index):
+    key = f"{TEST_KEY_PREFIX}/file_{index}.bin"
+    transfer.upload_file(upload_files[index], BUCKET_NAME, key)
+    return key
+
+
+def download_file(index, key):
+    transfer.download_file(BUCKET_NAME, key, download_files[index])
+
+
+# Generate files
+for path in upload_files:
+    generate_test_file(path, FILE_SIZE_MB)
+
+# Upload test
+print("Starting upload...")
+start_upload = time.time()
+with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENT_TRANSFERS) as executor:
+    print(f"Active Python threads: {threading.active_count()}")
+    print(f"System thread count from psutil: {psutil.Process().num_threads()}")
+    upload_keys = list(executor.map(upload_file, range(CONCURRENT_TRANSFERS)))
+end_upload = time.time()
+
+# Download test
+print("Starting download...")
+start_download = time.time()
+with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENT_TRANSFERS) as executor:
+    print(f"Active Python threads: {threading.active_count()}")
+    print(f"System thread count from psutil: {psutil.Process().num_threads()}")
+    executor.map(download_file, range(CONCURRENT_TRANSFERS), upload_keys)
+end_download = time.time()
+
+# Compute performance
+total_mb = FILE_SIZE_MB * CONCURRENT_TRANSFERS
+upload_speed = total_mb / (end_upload - start_upload)
+download_speed = total_mb / (end_download - start_download)
+
+print(f"Upload Time: {(end_upload - start_upload) * 1000:.0f} ms")
+print(f"Upload Speed: {upload_speed:.2f} MB/s")
+print(f"Download Time: {(end_download - start_download) * 1000:.0f} ms")
+print(f"Download Speed: {download_speed:.2f} MB/s")
+
+# Cleanup
+print("Cleaning up...")
+for key in upload_keys:
+    s3_client.delete_object(Bucket=BUCKET_NAME, Key=key)
+for path in upload_files + download_files:
+    if os.path.exists(path):
+        os.remove(path)
