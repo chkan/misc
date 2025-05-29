@@ -1,0 +1,16 @@
+plugins {
+    id 'application'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation platform('software.amazon.awssdk:bom:2.25.2')
+    implementation 'software.amazon.awssdk:s3'
+}
+
+application {
+    mainClass = 's3speedtest.S3Uploader' // Change to S3Downloader to test that class
+}
