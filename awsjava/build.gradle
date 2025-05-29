@@ -1,0 +1,32 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation platform('software.amazon.awssdk:bom:2.25.2')
+    implementation 'software.amazon.awssdk:s3'
+}
+
+application {
+    // Default main class; can be overridden with --args
+    mainClass = 's3speedtest.Uploader'
+}
+
+tasks.register("runUploader", JavaExec) {
+    group = "application"
+    description = "Run the S3 Uploader"
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass.set("s3speedtest.Uploader")
+}
+
+tasks.register("runDownloader", JavaExec) {
+    group = "application"
+    description = "Run the S3 Downloader"
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass.set("s3speedtest.Downloader")
+}
