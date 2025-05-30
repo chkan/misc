@@ -34,7 +34,8 @@ public class Downloader {
 
         List<Path> downloadFiles = new ArrayList<>();
         for (int i = 0; i < CONCURRENT_TRANSFERS; i++) {
-            downloadFiles.add(Files.createTempFile("download_", ".bin"));
+            Path path = Files.createTempFile("download_" + UUID.randomUUID(), ".bin");
+            downloadFiles.add(path);
         }
 
         ExecutorService executor = Executors.newFixedThreadPool(CONCURRENT_TRANSFERS);
